@@ -1,0 +1,417 @@
+import os
+from typing import Tuple, List, Dict
+from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, DateType, TimestampType
+from pyspark.sql.functions import col, to_date, avg, count, desc, sum as _sum, when, coalesce, date_add, unix_timestamp, max as _max, min as _min, datediff, current_date, lit
+
+# =====================================================================
+# MODULE 1: Airline Delay Analytics [cite: 2]
+# =====================================================================
+
+def load_flight_data(spark: SparkSession, path: str) -> DataFrame:
+    """Loads flight records from a CSV file and converts flight_date to DateType[cite: 18, 25]."""
+    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 29]
+    return df.withColumn("flight_date", to_date(col("flight_date"))) # [cite: 30]
+
+def filter_valid_flights(df: DataFrame) -> DataFrame:
+    """Keeps only records with a valid flight id and positive scheduled duration[cite: 35, 41]."""
+    return df.filter(col("flight_id").isNotNull() & (col("scheduled_minutes") > 0)) # [cite: 45, 46]
+
+def add_delay_minutes(df: DataFrame) -> DataFrame:
+    """Adds a new column delay_minutes calculated as actual_minutes - scheduled_minutes[cite: 49, 55, 60]."""
+    return df.withColumn("delay_minutes", col("actual_minutes") - col("scheduled_minutes")) # [cite: 59, 60]
+
+def filter_delayed_flights(df: DataFrame, threshold: int) -> DataFrame:
+    """Filters flights whose delay is greater than the given threshold and selects specific columns[cite: 63, 70, 75]."""
+    return df.filter(col("delay_minutes") > threshold).select("flight_id", "airline", "delay_minutes") # [cite: 74, 75]
+
+def avg_delay_by_airline(df: DataFrame) -> DataFrame:
+    """Calculates the average flight delay for each airline and renames it as avg_delay[cite: 80, 86, 91]."""
+    return df.groupBy("airline").agg(avg("delay_minutes").alias("avg_delay")) # [cite: 90, 91]
+
+def busiest_route(df: DataFrame) -> Tuple[str, int]:
+    """Returns the route with the highest number of flights as a python tuple[cite: 96, 102, 108]."""
+    top_route = df.groupBy("origin", "destination").agg(count("*").alias("flight_count")) \
+                  .orderBy(desc("flight_count")).first() # [cite: 106, 107]
+    if top_route:
+        route_str = f"{top_route['origin']}-{top_route['destination']}" # [cite: 108]
+        return (route_str, top_route['flight_count']) # [cite: 108]
+    return ("", 0)
+
+
+# =====================================================================
+# MODULE 2: Retail Revenue Intelligence [cite: 109]
+# =====================================================================
+
+def load_orders_data(spark: SparkSession, path: str) -> DataFrame:
+    """Loads retail order records from a CSV file and converts order_date to DateType[cite: 125, 132]."""
+    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 136]
+    return df.withColumn("order_date", to_date(col("order_date"))) # [cite: 137]
+
+def filter_valid_orders(df: DataFrame) -> DataFrame:
+    """Keeps only records with a valid order id and positive quantity[cite: 142, 148]."""
+    return df.filter(col("order_id").isNotNull() & (col("quantity") > 0)) # [cite: 152, 153]
+
+def add_order_amount(df: DataFrame) -> DataFrame:
+    """Adds a new column order_amount calculated as quantity * unit_price[cite: 156, 162, 167]."""
+    return df.withColumn("order_amount", col("quantity") * col("unit_price")) # [cite: 166, 167]
+
+def revenue_by_category(df: DataFrame) -> DataFrame:
+    """Calculates total revenue for each product category as total_revenue[cite: 170, 176, 181]."""
+    return df.groupBy("product_category").agg(_sum("order_amount").alias("total_revenue")) # [cite: 180, 181]
+
+def filter_orders_by_status(df: DataFrame, status_value: str) -> DataFrame:
+    """Filters orders for the selected status value and returns selected columns[cite: 186, 193, 198]."""
+    return df.filter(col("status") == status_value).select("order_id", "status", "city") # [cite: 197, 198]
+
+def top_city_by_revenue(df: DataFrame) -> Tuple[str, float]:
+    """Returns the city with the highest total order revenue as a Python tuple[cite: 203, 209, 215]."""
+    top_city = df.groupBy("city").agg(_sum("order_amount").alias("total_revenue")) \
+                 .orderBy(desc("total_revenue"), col("city").asc()).first() # [cite: 213, 214]
+    if top_city:
+        return (top_city['city'], float(top_city['total_revenue'])) # [cite: 215]
+    return ("", 0.0)
+
+
+# =====================================================================
+# MODULE 3: Gold Market Price Analysis [cite: 216]
+# =====================================================================
+
+def load_gold_prices(spark: SparkSession, path: str) -> DataFrame:
+    """Loads gold prices CSV file and converts trade_date to DateType[cite: 234, 236, 238]."""
+    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 254]
+    return df.withColumn("trade_date", to_date(col("trade_date"))) # [cite: 255]
+
+def filter_high_gold_prices(df: DataFrame, price_threshold: float) -> DataFrame:
+    """Filters rows where gold_price_per_gram is greater than the given threshold[cite: 257, 259, 261]."""
+    return df.filter(col("gold_price_per_gram") > price_threshold) # [cite: 285]
+
+def add_price_category(df: DataFrame) -> DataFrame:
+    """Adds a new column price_category based on conditional logic threshold constraints[cite: 287, 289, 291]."""
+    return df.withColumn(
+        "price_category",
+        when(col("gold_price_per_gram") >= 6000, "High") # [cite: 321]
+        .when((col("gold_price_per_gram") >= 5000) & (col("gold_price_per_gram") < 6000), "Medium") # [cite: 322]
+        .otherwise("Low") # [cite: 323]
+    )
+
+def avg_price_by_city(df: DataFrame) -> DataFrame:
+    """Calculates average gold price per gram by city and renames it as avg_gold_price[cite: 325, 327, 329]."""
+    return df.groupBy("city").agg(avg("gold_price_per_gram").alias("avg_gold_price")) # [cite: 353, 354]
+
+def highest_avg_gold_price_city(df: DataFrame) -> Tuple[str, float]:
+    """Returns the city with the highest average gold price as a tuple[cite: 356, 358, 360]."""
+    row = df.orderBy(desc("avg_gold_price"), col("city").asc()).first() # [cite: 377, 378]
+    if row:
+        return (row['city'], float(row['avg_gold_price'])) # [cite: 379, 380]
+    return ("", 0.0)
+
+
+# =====================================================================
+# MODULE 4: Insurance Claims Performance Analytics [cite: 381]
+# =====================================================================
+
+def create_claim_schema_and_load(spark: SparkSession, path: str) -> DataFrame:
+    """Loads claims data from a CSV using a predefined StructType explicit schema[cite: 388, 396, 403]."""
+    schema = StructType([
+        StructField("claim_id", StringType(), True), # [cite: 411, 412]
+        StructField("customer_id", StringType(), True), # [cite: 411, 412]
+        StructField("region", StringType(), True), # [cite: 411, 412]
+        StructField("claim_date", DateType(), True), # [cite: 411, 412]
+        StructField("claim_amount", DoubleType(), True), # [cite: 411, 412]
+        StructField("status", StringType(), True), # [cite: 411, 412]
+        StructField("promised_settlement", DateType(), True) # [cite: 411, 412]
+    ])
+    return spark.read.option("header", "true").schema(schema).csv(path) # [cite: 413]
+
+def handle_null_promised_settlement(df: DataFrame) -> DataFrame:
+    """Fills missing values in promised_settlement using formula: claim_date + 30 days[cite: 389, 415, 421]."""
+    return df.withColumn("promised_settlement", coalesce(col("promised_settlement"), date_add(col("claim_date"), 30))) # [cite: 427, 428]
+
+def filter_approved_claims_in_range(df: DataFrame, start_date: str, end_date: str) -> DataFrame:
+    """Filters only rows that are approved and lie within specified claim_date range[cite: 390, 430, 438]."""
+    return df.filter((col("status") == "approved") & col("claim_date").between(start_date, end_date)) # [cite: 445, 446]
+
+def top_region_by_total_claim(df: DataFrame) -> DataFrame:
+    """Returns the top region with highest total claim amount renamed as total_claim_amount[cite: 391, 448, 454]."""
+    return df.groupBy("region").agg(_sum("claim_amount").alias("total_claim_amount")) \
+             .orderBy(desc("total_claim_amount")).limit(1) # [cite: 459, 460, 461]
+
+def find_max_claim_holder(df: DataFrame) -> DataFrame:
+    """Sorts DataFrame descending to return the record with highest claim_amount[cite: 392, 463, 469]."""
+    return df.orderBy(desc("claim_amount")).limit(1) # [cite: 474]
+
+
+# =====================================================================
+# MODULE 5: Consignment Delivery Monitoring [cite: 476]
+# =====================================================================
+
+def load_consignment_data(spark: SparkSession) -> DataFrame:
+    """Creates an inline DataFrame with designated consignment monitoring columns[cite: 478, 480, 491, 497]."""
+    columns = ["order_id", "partner", "expected_delivery", "actual_delivery", "delay_reason"] # [cite: 504]
+    data = [
+        ("C999", "ShipNow", "2024-05-01 10:00:00", "2024-05-01 11:20:00", "Vehicle Issue"),
+        ("C899", "SpeedGo", "2024-05-01 10:00:00", "2024-05-01 11:45:00", "Traffic")
+    ]
+    return spark.createDataFrame(data, schema=columns) # [cite: 505]
+
+def append_delay_column_in_minutes(df: DataFrame) -> DataFrame:
+    """Calculates delay duration explicitly in minutes using unix_timestamp timestamps[cite: 481, 507, 513]."""
+    diff_secs = unix_timestamp(col("actual_delivery")) - unix_timestamp(col("expected_delivery")) # [cite: 520]
+    return df.withColumn("delay", diff_secs / 60.0) # [cite: 519, 521]
+
+def get_delayed_orders(df: DataFrame, threshold: int) -> DataFrame:
+    """Filters records where delay calculated in hours exceeds user parameter constraint threshold[cite: 482, 523, 530]."""
+    diff_hours = (unix_timestamp(col("actual_delivery")) - unix_timestamp(col("expected_delivery"))) / 3600.0 # [cite: 536, 537]
+    return df.withColumn("delay", diff_hours).filter(col("delay") > threshold) # [cite: 538, 539]
+
+def most_delayed_partner(df: DataFrame) -> DataFrame:
+    """Identifies delivery partner possessing highest cumulative delay mapped to total_delay[cite: 483, 541, 547]."""
+    return df.groupBy("partner").agg(_sum("delay").alias("total_delay")) \
+             .orderBy(desc("total_delay")).limit(1) # [cite: 553, 554]
+
+def delayed_orders_percentage(df: DataFrame) -> float:
+    """Calculates exact floating point percentage of orders exceeding 30 minute delay metrics[cite: 484, 556, 562]."""
+    total_orders = df.count() # [cite: 569]
+    if total_orders == 0:
+        return 0.0
+    delayed_orders = df.filter(col("delay") > 30).count() # [cite: 570]
+    return float((delayed_orders / total_orders) * 100.0) # [cite: 571, 572]
+
+
+# =====================================================================
+# MODULE 6: Wildlife Conservation Insights [cite: 573]
+# =====================================================================
+
+def load_species_data(spark: SparkSession, path: str) -> DataFrame:
+    """Loads species CSV dataset with inferring schema rules and casts survey timestamps[cite: 578, 587, 594]."""
+    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 601]
+    return df.withColumn("Last_Surveyed", to_date(col("Last_Surveyed"))) # [cite: 602]
+
+def rank_habitats_by_population(df: DataFrame) -> DataFrame:
+    """Ranks and outputs single top habitat aggregating sum of population forecasts[cite: 579, 604, 610]."""
+    return df.groupBy("Habitat_Type").agg(_sum("Population_Estimates").alias("total_population")) \
+             .orderBy(desc("total_population")).limit(1) # [cite: 616, 617, 618, 619]
+
+def filter_critically_endangered(df: DataFrame) -> DataFrame:
+    """Filters records containing Endangered or Critically Endangered protection statuses[cite: 580, 621, 627]."""
+    target_statuses = ["Endangered", "Critically Endangered"] # [cite: 632]
+    return df.filter(col("Protection_Status").isin(target_statuses)) # [cite: 633]
+
+def filter_recently_surveyed_endangered(df: DataFrame) -> DataFrame:
+    """Retrieves top row ordered descending by survey timeline for Endangered subset[cite: 581, 635, 641]."""
+    return df.filter(col("Protection_Status") == "Endangered").orderBy(desc("Last_Surveyed")).limit(1) # [cite: 646, 647, 648]
+
+
+# =====================================================================
+# MODULE 7: User Profile Engagement Analysis [cite: 650]
+# =====================================================================
+
+def load_profiles(spark: SparkSession, path: str) -> DataFrame:
+    """Loads user profile records and casts registration timestamps to DateType structures[cite: 653, 662, 669]."""
+    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 676]
+    return df.withColumn("registration_date", to_date(col("registration_date"))) # [cite: 677]
+
+def filter_latest_registrations(df: DataFrame, days_threshold: int) -> DataFrame:
+    """Filters entries within days threshold margin relative to maximum registration timeline[cite: 654, 679, 686]."""
+    latest_date_val = df.select(_max("registration_date")).first()[0] # [cite: 693]
+    return df.withColumn("diff_days", datediff(lit(latest_date_val), col("registration_date"))) \
+             .filter(col("diff_days") <= days_threshold) \
+             .drop("diff_days") # [cite: 695, 696]
+
+def find_popular_age_groups(df: DataFrame) -> list:
+    """Returns top 5 target user ages evaluated descending based on system frequency[cite: 655, 698, 704]."""
+    age_counts = df.groupBy("age").agg(count("*").alias("count_age")).orderBy(desc("age")).limit(5).collect() # [cite: 712, 713, 714]
+    return [int(row["age"]) for row in age_counts] # [cite: 715]
+
+def find_most_preferred_profession_and_rank_cities(df: DataFrame) -> Tuple[str, DataFrame]:
+    """Extracts prominent profession string metric alongside active localized city metrics ranking[cite: 656, 716, 722]."""
+    top_profession_row = df.groupBy("profession").agg(count("*").alias("cnt")) \
+                           .orderBy(desc("cnt")).first() # [cite: 730]
+    prof_str = top_profession_row["profession"] if top_profession_row else "" # [cite: 730]
+    
+    city_rankings = df.filter(col("active_status") == "Active") \
+                      .groupBy("city").agg(count("*").alias("users")) \
+                      .orderBy(desc("users")) # [cite: 731, 732]
+    return (prof_str, city_rankings) # [cite: 733]
+
+
+# =====================================================================
+# MODULE 8: Pharmacy Purchase Analytics [cite: 734]
+# =====================================================================
+
+def define_medicine_schema() -> StructType:
+    """Creates a predefined StructType layout identifying explicit nullable medical features[cite: 737, 739]."""
+    return StructType([
+        StructField("purchase_id", StringType(), True), # [cite: 740, 741, 746]
+        StructField("medicine_name", StringType(), True), # [cite: 740, 742, 746]
+        StructField("category", StringType(), True), # [cite: 740, 743, 746]
+        StructField("purchase_date", DateType(), True), # [cite: 740, 744, 746]
+        StructField("purchase_amount", DoubleType(), True) # [cite: 740, 745, 746]
+    ])
+
+def load_purchase_data(spark: SparkSession, path: str, schema: StructType) -> DataFrame:
+    """Loads medicine analytics from schema input maps and validates transaction timelines[cite: 749, 752]."""
+    df = spark.read.option("header", "true").schema(schema).csv(path) # [cite: 752]
+    return df.withColumn("purchase_date", to_date(col("purchase_date"))) # [cite: 753]
+
+def filter_by_purchase_date_range(df: DataFrame, start: str, end: str) -> DataFrame:
+    """Applies inclusive range timeline filter criteria directly mapping to user arguments[cite: 755, 760]."""
+    return df.filter(col("purchase_date").between(start, end)) # [cite: 761]
+
+def total_purchase_by_category(df: DataFrame) -> DataFrame:
+    """Aggregates cost records to measure categorical investment sum renamed as total_purchase[cite: 763, 768]."""
+    return df.groupBy("category").agg(_sum("purchase_amount").alias("total_purchase")) # [cite: 769]
+
+def compute_days_since_purchase(df: DataFrame) -> DataFrame:
+    """Appends explicit days_since_purchase attribute assessing distance relative to current system runtime[cite: 771, 777]."""
+    return df.withColumn("days_since_purchase", datediff(current_date(), col("purchase_date"))) # [cite: 776, 777]
+
+def get_top_medicine_by_sales(df: DataFrame) -> Tuple[str, float]:
+    """Retrieves top row instance to package primary medicine name alongside cost parameters as tuple[cite: 779, 785]."""
+    top_row = df.orderBy(desc("purchase_amount")).first() # [cite: 785, 786]
+    if top_row:
+        return (top_row["medicine_name"], float(top_row["purchase_amount"])) # [cite: 787, 788]
+    return ("", 0.0)
+
+
+# =====================================================================
+# MODULE 9: Tsunami Impact Assessment [cite: 789]
+# =====================================================================
+
+def load_tsunami_data(spark: SparkSession, path: str) -> DataFrame:
+    """Loads CSV tsunami event dataset parsing available standard dynamic options[cite: 791, 795, 804]."""
+    return spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 804]
+
+def filter_significant_events(df: DataFrame) -> DataFrame:
+    """Filters events matching high magnitude constraints (impact_value >= 4.0)[cite: 806, 810, 829]."""
+    return df.filter(col("impact_value") >= 4.0) # [cite: 829]
+
+def compute_impact_statistics(df: DataFrame) -> dict:
+    """Computes min, max, and avg score calculations grouped as dictionary properties[cite: 831, 835, 851]."""
+    stats = df.select(_min("impact_value"), _max("impact_value"), avg("impact_value")).first() # [cite: 850]
+    if stats:
+        return {"min_impact": stats[0], "max_impact": stats[1], "avg_impact": stats[2]} # [cite: 851]
+    return {"min_impact": 0, "max_impact": 0, "avg_impact": 0.0}
+
+def count_alert_issued_events(df: DataFrame) -> int:
+    """Counts specific recorded events where target emergency notifications triggered True[cite: 853, 857, 871]."""
+    return df.filter(col("alert_issued") == True).count() # [cite: 871, 872]
+
+def region_highest_avg_impact(df: DataFrame) -> str:
+    """Returns name segment mapping to region exhibiting maximum collective damage scores[cite: 873, 877, 893]."""
+    row = df.groupBy("region").agg(avg("impact_value").alias("avg_imp")) \
+            .orderBy(desc("avg_imp")).first() # [cite: 891, 892]
+    return row["region"] if row else "" # [cite: 893]
+
+
+# =====================================================================
+# MODULE 10: Podcast Listening Behavior Analysis [cite: 894]
+# =====================================================================
+
+def load_listens_data(spark: SparkSession, path: str) -> DataFrame:
+    """Loads listening records changing the tracking dimension to clean DateType objects[cite: 909, 916, 921]."""
+    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 920]
+    return df.withColumn("start_time", to_date(col("start_time"))) # [cite: 921]
+
+def filter_valid_sessions(df: DataFrame) -> DataFrame:
+    """Retains only system listings mapping to fully attributed non-null episode IDs[cite: 924, 930, 934]."""
+    return df.filter(col("episode_id").isNotNull()) # [cite: 934]
+
+def episode_minutes(df: DataFrame) -> DataFrame:
+    """Aggregates aggregated total time spent listening across discrete podcast IDs[cite: 935, 941, 945]."""
+    return df.groupBy("episode_id").agg(_sum("duration_min").alias("total_min")) # [cite: 945]
+
+def device_counts(df: DataFrame) -> DataFrame:
+    """Calculates active connection volume divided by reported platform connection category[cite: 950, 956, 960]."""
+    return df.groupBy("device_type").agg(count("*").alias("sessions")) # [cite: 960]
+
+def top_episode(df: DataFrame) -> Tuple[str, int]:
+    """Retrieves top record row context matching paramount user retention time spans[cite: 966, 972, 977]."""
+    row = df.orderBy(desc("total_min")).first() # [cite: 976, 977]
+    if row:
+        return (row["episode_id"], int(row["total_min"])) # [cite: 977]
+    return ("", 0)
+
+
+# =====================================================================
+# MODULE 11: Smart Grid Load Monitoring [cite: 980]
+# =====================================================================
+
+def load_grid_data(spark: SparkSession, path: str) -> DataFrame:
+    """Loads substation time-series logs and formats matching load metrics[cite: 997, 1004]."""
+    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 1004]
+    return df.withColumn("timestamp", col("timestamp").cast(TimestampType())) # [cite: 1004]
+
+def load_stations_ref(spark: SparkSession, path: str) -> DataFrame:
+    """Loads station structural static configuration dimensions using strict schema blueprints[cite: 1009, 1016, 1021]."""
+    schema = StructType([
+        StructField("station_id", StringType(), True), # [cite: 1022, 1023, 1027]
+        StructField("region", StringType(), True), # [cite: 1022, 1024, 1027]
+        StructField("rated_capacity_mw", DoubleType(), True) # [cite: 1022, 1025, 1027]
+    ])
+    return spark.read.option("header", "true").schema(schema).csv(path)
+
+def filter_nonneg(df: DataFrame) -> DataFrame:
+    """Eliminates negative metrics alongside non-attributed system stations[cite: 1028, 1034]."""
+    return df.filter((col("load_mw") >= 0) & col("station_id").isNotNull()) # [cite: 1034]
+
+def with_rolling_avg(df: DataFrame, window_minutes: int) -> str:
+    """Identifies unique identification trace mapping to absolute highest workload average[cite: 1037, 1044, 1050]."""
+    row = df.groupBy("station_id").agg(avg("load_mw").alias("avg_load")) \
+            .orderBy(desc("avg_load")).first() # [cite: 1048, 1049]
+    return row["station_id"] if row else "" # [cite: 1050]
+
+def join_station_meta(grid_df: DataFrame, ref_df: DataFrame) -> DataFrame:
+    """Performs an inner relational merge linking readings to deployment capacity profiles[cite: 1051, 1058]."""
+    return grid_df.join(ref_df, on="station_id", how="inner") # [cite: 1058]
+
+def top_peak_stations(df: DataFrame, n: int) -> DataFrame:
+    """Identifies subset scaling up to apex capacity logs bounded by dynamic limitations[cite: 1063, 1070, 1075]."""
+    return df.groupBy("station_id").agg(_max("load_mw").alias("peak")) \
+            .orderBy(desc("peak")).limit(n) # [cite: 1074, 1075]
+
+
+# =====================================================================
+# MODULE 12: Coffee Sales Revenue Optimization [cite: 1080]
+# =====================================================================
+
+def load_sales(spark: SparkSession, path: str) -> DataFrame:
+    """Enforces floating-point structural validation across coffee transaction entries via custom schema mapping[cite: 1099, 1106, 1116]."""
+    schema = StructType([
+        StructField("store_id", StringType(), True), # [cite: 1112, 1113]
+        StructField("city", StringType(), True), # [cite: 1112, 1113]
+        StructField("date", StringType(), True), # [cite: 1112, 1113]
+        StructField("drink_type", StringType(), True), # [cite: 1112, 1113]
+        StructField("quantity", IntegerType(), True), # [cite: 1112, 1113]
+        StructField("revenue", DoubleType(), True) # [cite: 1112, 1113, 1116]
+    ])
+    return spark.read.option("header", "true").schema(schema).csv(path) # [cite: 1114]
+
+def drop_bad_rows(df: DataFrame) -> DataFrame:
+    """Eliminates record row instances lacking either primary date or explicit drink classifications[cite: 1120, 1126]."""
+    return df.dropna(subset=["date", "drink_type"]) # [cite: 1128]
+
+def daily_drink_metrics(df: DataFrame) -> DataFrame:
+    """Aggregates metrics to evaluate product quantity and gross performance indicators daily[cite: 1129, 1135]."""
+    return df.groupBy("date", "drink_type").agg(
+        _sum("quantity").alias("qty"),
+        _sum("revenue").alias("rev")
+    ) # [cite: 1137]
+
+def with_share(df: DataFrame) -> List[str]:
+    """Evaluates proportional revenue contribution values sorting corresponding drink items descending[cite: 1143, 1149, 1150]."""
+    rev_by_drink = df.groupBy("drink_type").agg(_sum("rev").alias("rev_by_drink")) # [cite: 1152]
+    total_rev_val = rev_by_drink.select(_sum("rev_by_drink")).first()[0] # [cite: 1153]
+    
+    if not total_rev_val:
+        return []
+        
+    share_df = rev_by_drink.withColumn("share", col("rev_by_drink") / lit(total_rev_val)) \
+                           .orderBy(desc("share")) # [cite: 1154, 1155]
+    
+    collected_drinks = share_df.select("drink_type").collect()
+    return [row["drink_type"] for row in collected_drinks] # [cite: 1156]
+
+
+
