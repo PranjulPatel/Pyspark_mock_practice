@@ -70,34 +70,27 @@ def top_city_by_revenue(df:DataFrame)->Tuple[str,float]:
 # MODULE 3: Gold Market Price Analysis [Medium]
 # =====================================================================
 
-def load_gold_prices(spark: SparkSession, path: str) -> DataFrame:
-    """Loads gold prices CSV file and converts trade_date to DateType[cite: 234, 236, 238]."""
-    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 254]
-    return df.withColumn("trade_date", to_date(col("trade_date"))) # [cite: 255]
+def load_gold_price(spark:SparkSession,path:str)->DataFrame:
+    df=spark.read.csv(path,header=True,inferSchema=True)
+    df=df.withColumn("trade_date",to_date("trade_date"))
+    return df
 
-def filter_high_gold_prices(df: DataFrame, price_threshold: float) -> DataFrame:
-    """Filters rows where gold_price_per_gram is greater than the given threshold[cite: 257, 259, 261]."""
-    return df.filter(col("gold_price_per_gram") > price_threshold) # [cite: 285]
+def filter_high_gold_prices(df:DataFrame,price_threshold:float)->DataFrame:
+    df1=df.filter(col("gold_price_per_gram")>price_threshold)
+    return df1
 
-def add_price_category(df: DataFrame) -> DataFrame:
-    """Adds a new column price_category based on conditional logic threshold constraints[cite: 287, 289, 291]."""
-    return df.withColumn(
-        "price_category",
-        when(col("gold_price_per_gram") >= 6000, "High") # [cite: 321]
-        .when((col("gold_price_per_gram") >= 5000) & (col("gold_price_per_gram") < 6000), "Medium") # [cite: 322]
-        .otherwise("Low") # [cite: 323]
-    )
+def add_price_category(df:DataFrame)->DataFrame:
+    df2=df.withColumn("price_category",when(col("gold_price_per_gram">=6000,"High")
+    .when(col("gold_price_per_gram">=5000) & col("gold_price_per_gram"<6000),"Medium").otherwise("Low")))
+    return df2
 
-def avg_price_by_city(df: DataFrame) -> DataFrame:
-    """Calculates average gold price per gram by city and renames it as avg_gold_price[cite: 325, 327, 329]."""
-    return df.groupBy("city").agg(avg("gold_price_per_gram").alias("avg_gold_price")) # [cite: 353, 354]
+def avg_price_by_city(df:DataFrame)->DataFrame:
+    df3=df.groupBy("city").agg(avg("gold_price_per_gram").alias("avg_gold_price")).groupBy(desc("avg_gold_price"))
+    return df3
 
-def highest_avg_gold_price_city(df: DataFrame) -> Tuple[str, float]:
-    """Returns the city with the highest average gold price as a tuple[cite: 356, 358, 360]."""
-    row = df.orderBy(desc("avg_gold_price"), col("city").asc()).first() # [cite: 377, 378]
-    if row:
-        return (row['city'], float(row['avg_gold_price'])) # [cite: 379, 380]
-    return ("", 0.0)
+def highest_avg_gold_price_city(df:DataFrame)->Tuple[str,float]:
+    df4=df.orderBy(desc("avg_gold_price"),asc("city")).first()
+    return (df4["city"],df4["avg_gold_price"])
 
 
 # =====================================================================
