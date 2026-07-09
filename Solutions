@@ -8,69 +8,62 @@ from pyspark.sql.functions import col, to_date, avg, count, desc, sum as _sum, w
 # MODULE 1: Airline Delay Analytics [cite: 2]
 # =====================================================================
 
-def load_flight_data(spark: SparkSession, path: str) -> DataFrame:
-    """Loads flight records from a CSV file and converts flight_date to DateType[cite: 18, 25]."""
-    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 29]
-    return df.withColumn("flight_date", to_date(col("flight_date"))) # [cite: 30]
+def load_flight_data(spark:SparkSession,path:str)->DataFrame:
+    df=spark.read.csv(path,header=True,inferSchema=True)
+    df=df.withColumn("flight_date",to_date(col("flight_date")))
+    return df
 
-def filter_valid_flights(df: DataFrame) -> DataFrame:
-    """Keeps only records with a valid flight id and positive scheduled duration[cite: 35, 41]."""
-    return df.filter(col("flight_id").isNotNull() & (col("scheduled_minutes") > 0)) # [cite: 45, 46]
+def filter_valid_flights(df:DataFrame)->DataFrame:
+    df1=df.filter(col("flight_id").isNotNull() & (col("scheduled_minutes")>0))
+    return df1
 
-def add_delay_minutes(df: DataFrame) -> DataFrame:
-    """Adds a new column delay_minutes calculated as actual_minutes - scheduled_minutes[cite: 49, 55, 60]."""
-    return df.withColumn("delay_minutes", col("actual_minutes") - col("scheduled_minutes")) # [cite: 59, 60]
+def add_delay_minutes(df:DataFrame)->DataFrame:
+    df2=df.withColumn("delay_minutes",(col("actual_minutes")-col("scheduled_minutes")))
+    return df2
 
-def filter_delayed_flights(df: DataFrame, threshold: int) -> DataFrame:
-    """Filters flights whose delay is greater than the given threshold and selects specific columns[cite: 63, 70, 75]."""
-    return df.filter(col("delay_minutes") > threshold).select("flight_id", "airline", "delay_minutes") # [cite: 74, 75]
+def filter_delayed_flights(df:DataFrame,threshold:int)->DataFrame:
+    df3=df.filter(col("delay_minutes")>threshold).select("flight_id","airline","delay_minutes")
+    return df3
 
-def avg_delay_by_airline(df: DataFrame) -> DataFrame:
-    """Calculates the average flight delay for each airline and renames it as avg_delay[cite: 80, 86, 91]."""
-    return df.groupBy("airline").agg(avg("delay_minutes").alias("avg_delay")) # [cite: 90, 91]
+def avg_delay_by_airline(df:DataFrame)->DataFrame:
+    df4=df.groupBy("airline").agg(avg("delay_minutes").alias("avg_delay"))
+    return df4
 
-def busiest_route(df: DataFrame) -> Tuple[str, int]:
-    """Returns the route with the highest number of flights as a python tuple[cite: 96, 102, 108]."""
-    top_route = df.groupBy("origin", "destination").agg(count("*").alias("flight_count")) \
-                  .orderBy(desc("flight_count")).first() # [cite: 106, 107]
-    if top_route:
-        route_str = f"{top_route['origin']}-{top_route['destination']}" # [cite: 108]
-        return (route_str, top_route['flight_count']) # [cite: 108]
-    return ("", 0)
+def busiest_route(df:DataFrame)->Tuple[str,int]:
+    df_with_route = df.withColumn("route", concat_ws("-", "origin", "destination"))
+    df5 = (df_with_route.groupBy("route").agg(count("*").alias("flight_count")).orderBy(desc("flight_count")).first())
+    return (df5["route"], df5["flight_count"])
+
 
 
 # =====================================================================
 # MODULE 2: Retail Revenue Intelligence [cite: 109]
 # =====================================================================
 
-def load_orders_data(spark: SparkSession, path: str) -> DataFrame:
-    """Loads retail order records from a CSV file and converts order_date to DateType[cite: 125, 132]."""
-    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 136]
-    return df.withColumn("order_date", to_date(col("order_date"))) # [cite: 137]
+def load_orders_data(spark:SparkSession,path:str)->DataFrame:
+    df=spark.read.csv(path,header=True,inferSchema=True)
+    df=df.withColumn("order_date",to_date(col("order_date")))
+    return df
 
-def filter_valid_orders(df: DataFrame) -> DataFrame:
-    """Keeps only records with a valid order id and positive quantity[cite: 142, 148]."""
-    return df.filter(col("order_id").isNotNull() & (col("quantity") > 0)) # [cite: 152, 153]
+def filter_valid_orders(df:DataFrame)->DataFrame:
+    df1=df.filter(col("order_id").isNotNull() & (col("quantity")>0))
+    return df1
 
-def add_order_amount(df: DataFrame) -> DataFrame:
-    """Adds a new column order_amount calculated as quantity * unit_price[cite: 156, 162, 167]."""
-    return df.withColumn("order_amount", col("quantity") * col("unit_price")) # [cite: 166, 167]
+def add_order_amount(df:DataFrame)->DataFrame:
+    df2=df.withColumn("order_amount",(col("quantity")*col("unit_price")))
+    return df2
 
-def revenue_by_category(df: DataFrame) -> DataFrame:
-    """Calculates total revenue for each product category as total_revenue[cite: 170, 176, 181]."""
-    return df.groupBy("product_category").agg(_sum("order_amount").alias("total_revenue")) # [cite: 180, 181]
+def revenue_by_category(df:DataFrame)->DataFrame:
+    df3=df.groupBy("product_category").agg(sum("order_amount").alias("total_revenue")).orderBy(desc("total_revenue"))
+    return df3
 
-def filter_orders_by_status(df: DataFrame, status_value: str) -> DataFrame:
-    """Filters orders for the selected status value and returns selected columns[cite: 186, 193, 198]."""
-    return df.filter(col("status") == status_value).select("order_id", "status", "city") # [cite: 197, 198]
+def filter_orders_by_status(df:DataFrame,status_value:str)->DataFrame:
+    df4=df.filter(col("status")==status_value).select("order_id","status","city")
+    return df4
 
-def top_city_by_revenue(df: DataFrame) -> Tuple[str, float]:
-    """Returns the city with the highest total order revenue as a Python tuple[cite: 203, 209, 215]."""
-    top_city = df.groupBy("city").agg(_sum("order_amount").alias("total_revenue")) \
-                 .orderBy(desc("total_revenue"), col("city").asc()).first() # [cite: 213, 214]
-    if top_city:
-        return (top_city['city'], float(top_city['total_revenue'])) # [cite: 215]
-    return ("", 0.0)
+def top_city_by_revenue(df:DataFrame)->Tuple[str,float]:
+    df5=df.groupBy("city").agg(sum("order_amount").alias("total_amount")).orderBy(desc("total_amount"),asc("city")).first()
+    return (df5["city"],df5["revenue"])
 
 
 # =====================================================================
