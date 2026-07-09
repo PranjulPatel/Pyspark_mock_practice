@@ -132,37 +132,42 @@ def find_max_claim_holder(df:DataFrame)->DataFrame:
 # MODULE 5: Consignment Delivery Monitoring [cite: 476]
 # =====================================================================
 
-def load_consignment_data(spark: SparkSession) -> DataFrame:
-    """Creates an inline DataFrame with designated consignment monitoring columns[cite: 478, 480, 491, 497]."""
-    columns = ["order_id", "partner", "expected_delivery", "actual_delivery", "delay_reason"] # [cite: 504]
-    data = [
-        ("C999", "ShipNow", "2024-05-01 10:00:00", "2024-05-01 11:20:00", "Vehicle Issue"),
-        ("C899", "SpeedGo", "2024-05-01 10:00:00", "2024-05-01 11:45:00", "Traffic")
-    ]
-    return spark.createDataFrame(data, schema=columns) # [cite: 505]
+data=[]
+
+def load_consignment_data(spark:SparkSession)->DataFrame:
+    schema=StructType([
+        StructField("order_id",StringType(),True),
+        StructField("partner",StringType(),True),
+        StructField("expected_delivery",StringType(),True),
+        StructField("actual_delivery",StringType(),True),
+        StructField("delay_reason",StringType(),True)
+    ])
+    df=spark.createDataFrame(data,header=True,inferSchema=True)
+    return df
 
 def append_delay_column_in_minutes(df: DataFrame) -> DataFrame:
-    """Calculates delay duration explicitly in minutes using unix_timestamp timestamps[cite: 481, 507, 513]."""
-    diff_secs = unix_timestamp(col("actual_delivery")) - unix_timestamp(col("expected_delivery")) # [cite: 520]
-    return df.withColumn("delay", diff_secs / 60.0) # [cite: 519, 521]
+    a_ts=unix_timestamp(col("actual_delivery"))
+    e_ts=unix_timestamp(col("expected_delivery"))
+    df1=df.withColumn("delay",(a_ts-e_ts)/60.0)
+    return df1
 
-def get_delayed_orders(df: DataFrame, threshold: int) -> DataFrame:
-    """Filters records where delay calculated in hours exceeds user parameter constraint threshold[cite: 482, 523, 530]."""
-    diff_hours = (unix_timestamp(col("actual_delivery")) - unix_timestamp(col("expected_delivery"))) / 3600.0 # [cite: 536, 537]
-    return df.withColumn("delay", diff_hours).filter(col("delay") > threshold) # [cite: 538, 539]
 
-def most_delayed_partner(df: DataFrame) -> DataFrame:
-    """Identifies delivery partner possessing highest cumulative delay mapped to total_delay[cite: 483, 541, 547]."""
-    return df.groupBy("partner").agg(_sum("delay").alias("total_delay")) \
-             .orderBy(desc("total_delay")).limit(1) # [cite: 553, 554]
+def get_delayed_orders(df:DataFrame,threshold:int)->DataFrame:
+    a_ts=unix_timestamp(col("actual_delivery"))
+    e_ts=unix_timestamp(col("expected_delivery"))
+    df1=df.withColumn("delay",(a_ts-e_ts)/3600.0).filter(col("delay")>threshold)
+    return df1
 
-def delayed_orders_percentage(df: DataFrame) -> float:
-    """Calculates exact floating point percentage of orders exceeding 30 minute delay metrics[cite: 484, 556, 562]."""
-    total_orders = df.count() # [cite: 569]
-    if total_orders == 0:
-        return 0.0
-    delayed_orders = df.filter(col("delay") > 30).count() # [cite: 570]
-    return float((delayed_orders / total_orders) * 100.0) # [cite: 571, 572]
+def most_delayed_partner(df:DataFrame)->DataFrame:
+    df1=df.groupBy("partner").agg(sum("delay").alias("total_delay")).orderBy(desc("total_delay")).limit(1)
+    return df1
+
+def delayed_orders_percentage(df:DataFrame)->float:
+    total_orders = df.count() 
+    delayed_orders = df.filter(col("delay") > 30).count() 
+    return float((delayed_orders / total_orders) * 100.0)
+    
+    
 
 
 # =====================================================================
