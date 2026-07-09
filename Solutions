@@ -5,7 +5,7 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType, 
 from pyspark.sql.functions import col, to_date, avg, count, desc, sum as _sum, when, coalesce, date_add, unix_timestamp, max as _max, min as _min, datediff, current_date, lit
 
 # =====================================================================
-# MODULE 1: Airline Delay Analytics [cite: 2]
+# MODULE 1: Airline Delay Analytics (Medium)
 # =====================================================================
 
 def load_flight_data(spark:SparkSession,path:str)->DataFrame:
@@ -37,7 +37,7 @@ def busiest_route(df:DataFrame)->Tuple[str,int]:
 
 
 # =====================================================================
-# MODULE 2: Retail Revenue Intelligence [cite: 109]
+# MODULE 2: Retail Revenue Intelligence [Medium]
 # =====================================================================
 
 def load_orders_data(spark:SparkSession,path:str)->DataFrame:
@@ -67,7 +67,7 @@ def top_city_by_revenue(df:DataFrame)->Tuple[str,float]:
 
 
 # =====================================================================
-# MODULE 3: Gold Market Price Analysis [cite: 216]
+# MODULE 3: Gold Market Price Analysis [Medium]
 # =====================================================================
 
 def load_gold_prices(spark: SparkSession, path: str) -> DataFrame:
