@@ -94,7 +94,7 @@ def highest_avg_gold_price_city(df:DataFrame)->Tuple[str,float]:
 
 
 # =====================================================================
-# MODULE 4: Insurance Claims Performance Analytics [cite: 381]
+# MODULE 4: Insurance Claims Performance Analytics [Medium]
 # =====================================================================
 
 def create_claim_schema_and_load(spark:SparkSession,path:str)->DataFrame:
