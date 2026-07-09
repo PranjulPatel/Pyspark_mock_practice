@@ -174,24 +174,23 @@ def delayed_orders_percentage(df:DataFrame)->float:
 # MODULE 6: Wildlife Conservation Insights [cite: 573]
 # =====================================================================
 
-def load_species_data(spark: SparkSession, path: str) -> DataFrame:
-    """Loads species CSV dataset with inferring schema rules and casts survey timestamps[cite: 578, 587, 594]."""
-    df = spark.read.option("header", "true").option("inferSchema", "true").csv(path) # [cite: 601]
-    return df.withColumn("Last_Surveyed", to_date(col("Last_Surveyed"))) # [cite: 602]
+def load_species_data(spark:SparkSession,path:str)->DataFrame:
+    df=spark.read.csv(path,header=True,inferSchema=True)
+    df=df.withColumn("Last_Surveyed",to_date("Last_Surveyed"))
+    return df
 
-def rank_habitats_by_population(df: DataFrame) -> DataFrame:
-    """Ranks and outputs single top habitat aggregating sum of population forecasts[cite: 579, 604, 610]."""
-    return df.groupBy("Habitat_Type").agg(_sum("Population_Estimates").alias("total_population")) \
-             .orderBy(desc("total_population")).limit(1) # [cite: 616, 617, 618, 619]
+def rank_habitats_by_population(df:DataFrame)->DataFrame:
+    df1=df.groupBy("Habitat_Type").agg(sum("Population_Estimate").alias("total_population")).orderBy(desc("total_population")).limit(1)
+    return df1
 
-def filter_critically_endangered(df: DataFrame) -> DataFrame:
-    """Filters records containing Endangered or Critically Endangered protection statuses[cite: 580, 621, 627]."""
-    target_statuses = ["Endangered", "Critically Endangered"] # [cite: 632]
-    return df.filter(col("Protection_Status").isin(target_statuses)) # [cite: 633]
+def filter_critically_endangered(df:DataFrame)->DataFrame:
+    list=["Endangered","Critically Endangered"]
+    df1=df.filter(col("Protection_Status").isin(list))
+    return df1
 
-def filter_recently_surveyed_endangered(df: DataFrame) -> DataFrame:
-    """Retrieves top row ordered descending by survey timeline for Endangered subset[cite: 581, 635, 641]."""
-    return df.filter(col("Protection_Status") == "Endangered").orderBy(desc("Last_Surveyed")).limit(1) # [cite: 646, 647, 648]
+def filter_recently_surveyed_endangered(df:DataFrame)->DataFrame:
+    df1=df.filter(col("protection_status")=="Endangered").orderBy(desc("Last_Surveyed")).limit(1)
+    return df1
 
 
 # =====================================================================
