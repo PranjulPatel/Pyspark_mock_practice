@@ -97,35 +97,35 @@ def highest_avg_gold_price_city(df:DataFrame)->Tuple[str,float]:
 # MODULE 4: Insurance Claims Performance Analytics [cite: 381]
 # =====================================================================
 
-def create_claim_schema_and_load(spark: SparkSession, path: str) -> DataFrame:
-    """Loads claims data from a CSV using a predefined StructType explicit schema[cite: 388, 396, 403]."""
-    schema = StructType([
-        StructField("claim_id", StringType(), True), # [cite: 411, 412]
-        StructField("customer_id", StringType(), True), # [cite: 411, 412]
-        StructField("region", StringType(), True), # [cite: 411, 412]
-        StructField("claim_date", DateType(), True), # [cite: 411, 412]
-        StructField("claim_amount", DoubleType(), True), # [cite: 411, 412]
-        StructField("status", StringType(), True), # [cite: 411, 412]
-        StructField("promised_settlement", DateType(), True) # [cite: 411, 412]
+def create_claim_schema_and_load(spark:SparkSession,path:str)->DataFrame:
+    schema=StructType([
+        StructField("claim_id",StringType(),True),
+        StructField("customer_id",StringType(),True),
+        StructField("region",StringType(),True),
+        StructField("claim_date",DateType(),True),
+        StructField("claim_amount",DoubleType(),True),
+        StructField("status",StringType(),True),
+        StructField("promised_settlement",DateType(),True)
     ])
-    return spark.read.option("header", "true").schema(schema).csv(path) # [cite: 413]
+    df=spark.createDataFrame(path,schema=schema,header=True,inferSchema=True)
+    return df
 
-def handle_null_promised_settlement(df: DataFrame) -> DataFrame:
-    """Fills missing values in promised_settlement using formula: claim_date + 30 days[cite: 389, 415, 421]."""
-    return df.withColumn("promised_settlement", coalesce(col("promised_settlement"), date_add(col("claim_date"), 30))) # [cite: 427, 428]
+def handle_null_promised_settlement(df:DataFrame)->DataFrame:
+    df1=df.withColumn("promised_settlement", coalesce(col("promised_settlement"), date_add(col("claim_date"), 30)))
+    return df1
 
-def filter_approved_claims_in_range(df: DataFrame, start_date: str, end_date: str) -> DataFrame:
-    """Filters only rows that are approved and lie within specified claim_date range[cite: 390, 430, 438]."""
-    return df.filter((col("status") == "approved") & col("claim_date").between(start_date, end_date)) # [cite: 445, 446]
+def filter_approved_claims_in_range(df:DataFrame,start_date:str,end_date:str)->DataFrame:
+    df2=df.filter((col("status")=="approved") & (col("claim_date").between(start_date,end_date)))
+    return df2
 
-def top_region_by_total_claim(df: DataFrame) -> DataFrame:
-    """Returns the top region with highest total claim amount renamed as total_claim_amount[cite: 391, 448, 454]."""
-    return df.groupBy("region").agg(_sum("claim_amount").alias("total_claim_amount")) \
-             .orderBy(desc("total_claim_amount")).limit(1) # [cite: 459, 460, 461]
 
-def find_max_claim_holder(df: DataFrame) -> DataFrame:
-    """Sorts DataFrame descending to return the record with highest claim_amount[cite: 392, 463, 469]."""
-    return df.orderBy(desc("claim_amount")).limit(1) # [cite: 474]
+def top_region_by_total_claim(df:DataFrame)->DataFrame:
+    df3=df.groupBy("region").agg(sum("claim_amount").alias("total_claim_amount")).orderBy(desc("total_claim_amount")).limit(1)
+    return df3
+
+def find_max_claim_holder(df:DataFrame)->DataFrame:
+    df4=df.orderBy("claim_amount").limit(1)
+    return df4
 
 
 # =====================================================================
